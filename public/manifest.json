@@ -1,14 +1,31 @@
 {
   "manifest_version": 3,
   "name": "PromptStudio",
-  "version": "1.0.0",
-  "description": "Manage and organize your AI prompts",
-  "action": {
-    "default_popup": "index.html",
-    "default_title": "PromptStudio"
-  },
-  "permissions": [
-    "storage"
+  "version": "1.0",
+  "description": "Organize your ChatGPT history into folders.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*"
+  ],
+  "action": {},
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*", "icons/*"],
+      "matches": ["<all_urls>"]
+    }
   ],
   "icons": {
     "16": "icons/icon16.png",

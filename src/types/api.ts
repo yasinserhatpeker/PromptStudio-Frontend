@@ -39,12 +39,14 @@ export interface CreatePromptDTO {
   content?: string | null;
   tags?: string | null;
   userId: string;
+  collectionId?: string | null;
 }
 
 export interface UpdatePromptDTO {
   title?: string | null;
   content?: string | null;
   tags?: string | null;
+  collectionId?: string | null;
 }
 
 // ============================================
@@ -77,6 +79,7 @@ export interface Prompt {
   content: string | null;
   tags: string | null;
   userId: string;
+  collectionId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
