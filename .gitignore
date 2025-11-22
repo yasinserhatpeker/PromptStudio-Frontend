@@ -1,59 +1,24 @@
-# --- Dependencies (Bağımlılıklar) ---
-node_modules/
-.pnp
-.pnp.js
-
-# --- Build Outputs (Derleme Çıktıları) ---
-dist/
-build/
-out/
-
-# --- Environment Variables (Gizli Anahtarlar) ---
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# --- Logs (Hata Kayıtları) ---
+# Logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# --- Operating System Files (İşletim Sistemi Dosyaları) ---
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
+node_modules
+dist
+dist-ssr
+*.local
 
-# Windows
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-Desktop.ini
-
-# --- IDE & Editors (Editör Ayarları) ---
-# VS Code
+# Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/settings.json
-*.code-workspace
-
-# Visual Studio (Büyük IDE)
-.vs/
-*.user
+.idea
+.DS_Store
 *.suo
-*.cache
-*.pdb
-*.opensdf
-*.sdf
-
-# --- Testing ---
-coverage/
-
-# --- Chrome Extension Specific ---
-# Eğer eklentiyi paketlersen oluşan gizli anahtarı asla yükleme!
-*.pem
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
