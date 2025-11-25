@@ -4,24 +4,34 @@ import { promptApi, collectionApi } from '../services';
 import { BookmarkModal } from './BookmarkModal';
 import type { Prompt, PromptCollection } from '../types/api';
 
+// Gemini Dark Theme Colors
+const COLORS = {
+  background: '#131314',
+  surface: '#1E1F20',
+  input: '#282A2C',
+  textPrimary: '#E3E3E3',
+  textSecondary: '#C4C7C5',
+  accent: '#A8C7FA',
+  border: '#444746',
+  buttonPrimary: '#8AB4F8',
+  buttonPrimaryText: '#041E49',
+};
+
 export function Dashboard() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const { logout, user } = useAuthStore();
 
-  // Data state
   const [bookmarks, setBookmarks] = useState<Prompt[]>([]);
   const [folders, setFolders] = useState<PromptCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingBookmark, setEditingBookmark] = useState<Prompt | null>(null);
   const [autoFillData, setAutoFillData] = useState<{ title: string; url: string } | null>(null);
 
-  // Load data on mount
   useEffect(() => {
     loadData();
   }, []);
@@ -44,24 +54,17 @@ export function Dashboard() {
 
   const filteredBookmarks = useMemo(() => {
     let result = bookmarks;
-
-    // Filter by folder
     if (selectedFolderId === 'uncategorized') {
       result = result.filter((b) => !b.collectionId);
     } else if (selectedFolderId) {
       result = result.filter((b) => b.collectionId === selectedFolderId);
     }
-
-    // Filter by search
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
-        (b) =>
-          b.title?.toLowerCase().includes(query) ||
-          b.content?.toLowerCase().includes(query)
+        (b) => b.title?.toLowerCase().includes(query) || b.content?.toLowerCase().includes(query)
       );
     }
-
     return result;
   }, [selectedFolderId, searchQuery, bookmarks]);
 
@@ -71,10 +74,8 @@ export function Dashboard() {
   };
 
   const handleBookmarkThisChat = () => {
-    // Auto-fill from current page
     const currentUrl = window.location.href;
     const currentTitle = document.title.replace(' | ChatGPT', '').replace('ChatGPT - ', '');
-
     setAutoFillData({ title: currentTitle, url: currentUrl });
     setModalMode('create');
     setEditingBookmark(null);
@@ -94,55 +95,34 @@ export function Dashboard() {
 
   const handleSaveBookmark = async (data: { title: string; url: string; collectionId: string | null }) => {
     console.log('🔖 [Dashboard] handleSaveBookmark called:', { data, user, modalMode });
-
     if (!user) {
       console.error('🔖 [Dashboard] No user object available');
       throw new Error('User not loaded. Please refresh and try again.');
     }
-
     if (!user.id) {
       console.error('🔖 [Dashboard] User object missing ID:', user);
       throw new Error('User ID not available. Please log out and log in again.');
     }
-
     try {
       if (modalMode === 'create') {
-        const payload = {
-          title: data.title,
-          content: data.url,
-          tags: null,
-          userId: user.id,
-          collectionId: data.collectionId,
-        };
-        console.log('🔖 [Dashboard] Creating bookmark with payload:', payload);
-
+        const payload = { title: data.title, content: data.url, tags: null, userId: user.id, collectionId: data.collectionId };
         const newBookmark = await promptApi.create(payload);
         setBookmarks((prev) => [newBookmark, ...prev]);
         showToast('Chat bookmarked!');
       } else if (editingBookmark) {
-        const payload = {
-          title: data.title,
-          content: data.url,
-          collectionId: data.collectionId,
-        };
-        console.log('🔖 [Dashboard] Updating bookmark:', editingBookmark.id, payload);
-
+        const payload = { title: data.title, content: data.url, collectionId: data.collectionId };
         const updated = await promptApi.update(editingBookmark.id, payload);
-        setBookmarks((prev) =>
-          prev.map((b) => (b.id === editingBookmark.id ? updated : b))
-        );
+        setBookmarks((prev) => prev.map((b) => (b.id === editingBookmark.id ? updated : b)));
         showToast('Bookmark updated!');
       }
     } catch (error) {
       console.error('🔖 [Dashboard] Save failed:', error);
-      // Re-throw with the error message (already processed by promptApi)
       throw error;
     }
   };
 
   const handleDeleteBookmark = async () => {
     if (!editingBookmark) return;
-
     await promptApi.delete(editingBookmark.id);
     setBookmarks((prev) => prev.filter((b) => b.id !== editingBookmark.id));
     showToast('Bookmark deleted!');
@@ -154,189 +134,206 @@ export function Dashboard() {
     return folder?.name || 'Unknown';
   };
 
+  const sidebarButtonStyle = (isActive: boolean): React.CSSProperties => ({
+    width: '100%',
+    textAlign: 'left',
+    padding: '10px 16px',
+    fontSize: '13px',
+    color: isActive ? COLORS.accent : COLORS.textSecondary,
+    backgroundColor: isActive ? COLORS.surface : 'transparent',
+    border: 'none',
+    borderRadius: '24px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    fontWeight: isActive ? 500 : 400,
+  });
+
   return (
-    <div className="h-full flex flex-col bg-slate-950">
-      {/* User Bar with Logout */}
-      <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: COLORS.background }}>
+      {/* User Bar */}
+      <div
+        style={{
+          padding: '12px 16px',
+          borderBottom: `1px solid ${COLORS.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              backgroundColor: COLORS.accent,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: COLORS.buttonPrimaryText,
+              fontSize: '14px',
+              fontWeight: 500,
+            }}
+          >
             {user?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
           </div>
-          <span className="text-sm text-slate-300 truncate max-w-[150px]">
+          <span style={{ fontSize: '13px', color: COLORS.textPrimary, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user?.username || user?.email || 'User'}
           </span>
         </div>
         <button
           onClick={logout}
-          className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+          style={{
+            fontSize: '12px',
+            backgroundColor: COLORS.surface,
+            color: COLORS.textSecondary,
+            padding: '8px 14px',
+            borderRadius: '20px',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'background-color 0.2s',
+          }}
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
           Logout
         </button>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - Folders */}
-        <div className="w-1/4 min-w-[90px] bg-slate-900 border-r border-slate-800 flex flex-col">
-          <div className="p-2 border-b border-slate-800">
-            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Folders</span>
-          </div>
-          <nav className="flex-1 overflow-auto py-1">
-            {/* All Chats */}
-            <button
-              onClick={() => setSelectedFolderId(null)}
-              className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                selectedFolderId === null
-                  ? 'bg-blue-600/20 text-blue-400 border-r-2 border-blue-500'
-                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-              }`}
-            >
-              All Chats
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Sidebar */}
+        <div style={{ width: '140px', minWidth: '140px', padding: '12px 8px', borderRight: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <p style={{ fontSize: '11px', fontWeight: 500, color: COLORS.textSecondary, padding: '8px 16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Folders</p>
+          <button onClick={() => setSelectedFolderId(null)} style={sidebarButtonStyle(selectedFolderId === null)}>All Chats</button>
+          <button onClick={() => setSelectedFolderId('uncategorized')} style={sidebarButtonStyle(selectedFolderId === 'uncategorized')}>Uncategorized</button>
+          {folders.map((folder) => (
+            <button key={folder.id} onClick={() => setSelectedFolderId(folder.id)} style={sidebarButtonStyle(selectedFolderId === folder.id)}>
+              {folder.name || 'Unnamed'}
             </button>
-
-            {/* Uncategorized */}
-            <button
-              onClick={() => setSelectedFolderId('uncategorized')}
-              className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                selectedFolderId === 'uncategorized'
-                  ? 'bg-blue-600/20 text-blue-400 border-r-2 border-blue-500'
-                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-              }`}
-            >
-              Uncategorized
-            </button>
-
-            {/* Dynamic Folders */}
-            {folders.map((folder) => (
-              <button
-                key={folder.id}
-                onClick={() => setSelectedFolderId(folder.id)}
-                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                  selectedFolderId === folder.id
-                    ? 'bg-blue-600/20 text-blue-400 border-r-2 border-blue-500'
-                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                }`}
-              >
-                {folder.name || 'Unnamed'}
-              </button>
-            ))}
-          </nav>
+          ))}
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-950">
-          {/* Header with Search & Bookmark Button */}
-          <div className="p-2 border-b border-slate-800 flex gap-2">
-            {/* Search Bar */}
-            <div className="relative flex-1">
-              <svg
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          {/* Search & Bookmark Header */}
+          <div style={{ padding: '12px 16px', display: 'flex', gap: '10px', borderBottom: `1px solid ${COLORS.border}` }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <svg style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: COLORS.textSecondary }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search chats..."
-                className="w-full pl-8 pr-2 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px 10px 42px',
+                  backgroundColor: COLORS.input,
+                  border: 'none',
+                  borderRadius: '24px',
+                  color: COLORS.textPrimary,
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
               />
             </div>
-
-            {/* Bookmark This Chat Button */}
             <button
               onClick={handleBookmarkThisChat}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '10px 16px',
+                backgroundColor: COLORS.buttonPrimary,
+                color: COLORS.buttonPrimaryText,
+                border: 'none',
+                borderRadius: '24px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
             >
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <svg style={{ width: '16px', height: '16px' }} fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z" />
               </svg>
               Bookmark
             </button>
           </div>
 
-          {/* Bookmarks Grid */}
-          <div className="flex-1 overflow-auto p-2">
+          {/* Bookmarks List */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
             {isLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <div style={{ width: '24px', height: '24px', border: `3px solid ${COLORS.surface}`, borderTopColor: COLORS.accent, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
               </div>
             ) : filteredBookmarks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <svg
-                  className="w-10 h-10 text-slate-700 mb-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                  />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
+                <svg style={{ width: '48px', height: '48px', color: COLORS.border, marginBottom: '12px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
-                <p className="text-slate-400 text-xs">No saved chats</p>
-                <p className="text-slate-500 text-[10px] mt-1">Click "Bookmark" to save this chat</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: '14px', margin: 0 }}>No saved chats</p>
+                <p style={{ color: COLORS.textSecondary, fontSize: '12px', marginTop: '4px', opacity: 0.7 }}>Click "Bookmark" to save this chat</p>
               </div>
             ) : (
-              <div className="grid gap-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {filteredBookmarks.map((bookmark) => (
                   <div
                     key={bookmark.id}
-                    className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 transition-all hover:border-blue-500 hover:bg-slate-800 group"
+                    style={{
+                      backgroundColor: COLORS.surface,
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s',
+                    }}
+                    onClick={() => bookmark.content && handleNavigateToChat(bookmark.content)}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div
-                        className="min-w-0 flex-1 cursor-pointer"
-                        onClick={() => bookmark.content && handleNavigateToChat(bookmark.content)}
-                      >
-                        <h3 className="font-medium text-slate-100 text-xs truncate hover:text-blue-400 transition-colors">
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: 500, color: COLORS.textPrimary, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {bookmark.title || 'Untitled Chat'}
                         </h3>
-                        <p className="text-slate-500 text-[10px] mt-0.5 truncate">
+                        <p style={{ fontSize: '12px', color: COLORS.textSecondary, margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {bookmark.content || 'No URL'}
                         </p>
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          <span className="px-1.5 py-0.5 bg-blue-900 text-blue-400 text-[9px] rounded">
-                            {getFolderName(bookmark.collectionId)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Edit Button */}
-                        <button
-                          onClick={() => handleEditBookmark(bookmark)}
-                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded transition-colors"
-                          title="Edit bookmark"
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            marginTop: '8px',
+                            padding: '4px 10px',
+                            backgroundColor: COLORS.input,
+                            color: COLORS.accent,
+                            fontSize: '11px',
+                            borderRadius: '12px',
+                          }}
                         >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-                        {/* Open Link Button */}
-                        <button
-                          onClick={() => bookmark.content && handleNavigateToChat(bookmark.content)}
-                          className="p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
-                          title="Open chat"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </button>
+                          {getFolderName(bookmark.collectionId)}
+                        </span>
                       </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditBookmark(bookmark); }}
+                        style={{
+                          padding: '8px',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          color: COLORS.textSecondary,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -346,34 +343,24 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Toast Notification */}
+      {/* Toast */}
       {toast && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg shadow-lg">
-          <p className="text-xs text-slate-200">{toast}</p>
+        <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)', padding: '10px 20px', backgroundColor: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: '24px' }}>
+          <p style={{ fontSize: '13px', color: COLORS.textPrimary, margin: 0 }}>{toast}</p>
         </div>
       )}
 
-      {/* Bookmark Modal */}
+      {/* Modal */}
       <BookmarkModal
         isOpen={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingBookmark(null);
-          setAutoFillData(null);
-        }}
+        onClose={() => { setModalOpen(false); setEditingBookmark(null); setAutoFillData(null); }}
         onSave={handleSaveBookmark}
         onDelete={modalMode === 'edit' ? handleDeleteBookmark : undefined}
         folders={folders}
         initialData={
           modalMode === 'edit' && editingBookmark
-            ? {
-                title: editingBookmark.title || '',
-                url: editingBookmark.content || '',
-                collectionId: editingBookmark.collectionId || null,
-              }
-            : autoFillData
-            ? { ...autoFillData, collectionId: null }
-            : { title: '', url: '', collectionId: null }
+            ? { title: editingBookmark.title || '', url: editingBookmark.content || '', collectionId: editingBookmark.collectionId || null }
+            : autoFillData ? { ...autoFillData, collectionId: null } : { title: '', url: '', collectionId: null }
         }
         mode={modalMode}
       />

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PromptStudio",
   "version": "1.0",
-  "description": "Organize your ChatGPT history into folders.",
+  "description": "Organize your Gemini history into folders.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://chatgpt.com/*",
