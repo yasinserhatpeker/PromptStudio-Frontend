@@ -518,7 +518,7 @@
             "type": "string",
             "nullable": true
           },
-          "userId": {
+          "collectionId": {
             "type": "string",
             "format": "uuid"
           }
@@ -616,6 +616,10 @@
           "tags": {
             "type": "string",
             "nullable": true
+          },
+          "collectionId": {
+            "type": "string",
+            "format": "uuid"
           }
         },
         "additionalProperties": false

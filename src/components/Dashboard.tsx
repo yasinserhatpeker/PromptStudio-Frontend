@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '../store';
 import { promptApi, collectionApi } from '../services';
 import { BookmarkModal } from './BookmarkModal';
+import { CreateCollectionModal } from './CreateCollectionModal';
 import type { Prompt, PromptCollection } from '../types/api';
+import { FolderOpen, Plus } from 'lucide-react';
+import { SYSTEM_CATEGORIES } from '../constants/categories';
 
 // Gemini Dark Theme Colors
 const COLORS = {
@@ -30,7 +33,8 @@ export function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingBookmark, setEditingBookmark] = useState<Prompt | null>(null);
-  const [autoFillData, setAutoFillData] = useState<{ title: string; url: string } | null>(null);
+
+  const [createCollectionModalOpen, setCreateCollectionModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -74,9 +78,7 @@ export function Dashboard() {
   };
 
   const handleBookmarkThisChat = () => {
-    const currentUrl = window.location.href;
-    const currentTitle = document.title.replace(' | ChatGPT', '').replace('ChatGPT - ', '');
-    setAutoFillData({ title: currentTitle, url: currentUrl });
+    console.log('🔖 [Dashboard] Opening bookmark modal with selectedFolderId:', selectedFolderId);
     setModalMode('create');
     setEditingBookmark(null);
     setModalOpen(true);
@@ -84,7 +86,6 @@ export function Dashboard() {
 
   const handleEditBookmark = (bookmark: Prompt) => {
     setEditingBookmark(bookmark);
-    setAutoFillData(null);
     setModalMode('edit');
     setModalOpen(true);
   };
@@ -94,23 +95,19 @@ export function Dashboard() {
   };
 
   const handleSaveBookmark = async (data: { title: string; url: string; collectionId: string | null }) => {
-    console.log('🔖 [Dashboard] handleSaveBookmark called:', { data, user, modalMode });
-    if (!user) {
-      console.error('🔖 [Dashboard] No user object available');
-      throw new Error('User not loaded. Please refresh and try again.');
-    }
-    if (!user.id) {
-      console.error('🔖 [Dashboard] User object missing ID:', user);
-      throw new Error('User ID not available. Please log out and log in again.');
-    }
+    console.log('🔖 [Dashboard] handleSaveBookmark called:', { data, modalMode, selectedFolderId });
+    console.log('🔖 [Dashboard] collectionId type:', typeof data.collectionId, 'value:', data.collectionId);
+
     try {
       if (modalMode === 'create') {
-        const payload = { title: data.title, content: data.url, tags: null, userId: user.id, collectionId: data.collectionId };
+        const payload = { title: data.title, content: data.url, tags: null, collectionId: data.collectionId };
+        console.log('🔖 [Dashboard] Creating bookmark with payload:', payload);
         const newBookmark = await promptApi.create(payload);
         setBookmarks((prev) => [newBookmark, ...prev]);
         showToast('Chat bookmarked!');
       } else if (editingBookmark) {
-        const payload = { title: data.title, content: data.url, collectionId: data.collectionId };
+        const payload = { title: data.title, content: data.url, tags: null, collectionId: data.collectionId };
+        console.log('🔖 [Dashboard] Updating bookmark with payload:', payload);
         const updated = await promptApi.update(editingBookmark.id, payload);
         setBookmarks((prev) => prev.map((b) => (b.id === editingBookmark.id ? updated : b)));
         showToast('Bookmark updated!');
@@ -128,25 +125,111 @@ export function Dashboard() {
     showToast('Bookmark deleted!');
   };
 
-  const getFolderName = (collectionId: string | null | undefined) => {
-    if (!collectionId) return 'Uncategorized';
-    const folder = folders.find((f) => f.id === collectionId);
-    return folder?.name || 'Unknown';
+  const handleCreateCollection = async (name: string) => {
+    if (!user?.id) {
+      throw new Error('User ID not available');
+    }
+
+    const newCollection = await collectionApi.create({ name, userId: user.id });
+    setFolders((prev) => [...prev, newCollection]);
+    showToast('Collection created!');
   };
 
-  const sidebarButtonStyle = (isActive: boolean): React.CSSProperties => ({
-    width: '100%',
-    textAlign: 'left',
-    padding: '10px 16px',
-    fontSize: '13px',
-    color: isActive ? COLORS.accent : COLORS.textSecondary,
-    backgroundColor: isActive ? COLORS.surface : 'transparent',
-    border: 'none',
-    borderRadius: '24px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    fontWeight: isActive ? 500 : 400,
-  });
+  const getCategoryInfo = (collectionId: string | null | undefined) => {
+    // Check if it's uncategorized
+    if (!collectionId) {
+      return { label: 'Uncategorized', color: '#9CA3AF', bgColor: 'rgba(156, 163, 175, 0.1)' };
+    }
+
+    // Check user folders (GUID strings from API)
+    const folder = folders.find((f) => f.id === collectionId);
+    if (folder) {
+      return { label: folder.name || 'Unnamed', color: '#9CA3AF', bgColor: 'rgba(156, 163, 175, 0.1)' };
+    }
+
+    return { label: 'Unknown', color: '#9CA3AF', bgColor: 'rgba(156, 163, 175, 0.1)' };
+  };
+
+  const renderCategoryButton = (category: { id: string | null; label: string; icon: any; color: string }, isActive: boolean) => {
+    const Icon = category.icon;
+    return (
+      <button
+        key={category.id ?? 'all'}
+        onClick={() => setSelectedFolderId(category.id)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '12px 16px',
+          width: '100%',
+          textAlign: 'left',
+          borderRadius: '24px',
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          backgroundColor: isActive ? '#004A77' : 'transparent',
+          color: isActive ? COLORS.textPrimary : COLORS.textSecondary,
+          fontSize: '13px',
+          fontWeight: isActive ? 500 : 400,
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = '#2d2e30';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }
+        }}
+      >
+        <Icon size={18} style={{ color: isActive ? COLORS.textPrimary : category.color, flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {category.label}
+        </span>
+      </button>
+    );
+  };
+
+  const renderFolderButton = (folder: PromptCollection, isActive: boolean) => {
+    return (
+      <button
+        key={folder.id}
+        onClick={() => setSelectedFolderId(folder.id)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '12px 16px',
+          width: '100%',
+          textAlign: 'left',
+          borderRadius: '24px',
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          backgroundColor: isActive ? '#004A77' : 'transparent',
+          color: isActive ? COLORS.textPrimary : COLORS.textSecondary,
+          fontSize: '13px',
+          fontWeight: isActive ? 500 : 400,
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = '#2d2e30';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }
+        }}
+      >
+        <FolderOpen size={18} style={{ color: isActive ? COLORS.textPrimary : '#9CA3AF', flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {folder.name || 'Unnamed'}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: COLORS.background }}>
@@ -175,10 +258,10 @@ export function Dashboard() {
               fontWeight: 500,
             }}
           >
-            {user?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+            {user?.username?.[0]?.toUpperCase() || 'U'}
           </div>
-          <span style={{ fontSize: '13px', color: COLORS.textPrimary, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {user?.username || user?.email || 'User'}
+          <span style={{ fontSize: '13px', color: COLORS.textPrimary, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={user?.email || ''}>
+            {user?.username || 'User'}
           </span>
         </div>
         <button
@@ -206,15 +289,54 @@ export function Dashboard() {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Sidebar */}
-        <div style={{ width: '140px', minWidth: '140px', padding: '12px 8px', borderRight: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 500, color: COLORS.textSecondary, padding: '8px 16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Folders</p>
-          <button onClick={() => setSelectedFolderId(null)} style={sidebarButtonStyle(selectedFolderId === null)}>All Chats</button>
-          <button onClick={() => setSelectedFolderId('uncategorized')} style={sidebarButtonStyle(selectedFolderId === 'uncategorized')}>Uncategorized</button>
-          {folders.map((folder) => (
-            <button key={folder.id} onClick={() => setSelectedFolderId(folder.id)} style={sidebarButtonStyle(selectedFolderId === folder.id)}>
-              {folder.name || 'Unnamed'}
-            </button>
-          ))}
+        <div style={{ width: '200px', minWidth: '200px', padding: '12px 8px', borderRight: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
+          {/* System Categories (All, Uncategorized) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+            {SYSTEM_CATEGORIES.map((category) =>
+              renderCategoryButton(category, selectedFolderId === category.id)
+            )}
+          </div>
+
+          {/* User Folders Section */}
+          <>
+            <div style={{ height: '1px', backgroundColor: COLORS.border, margin: '8px 12px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 500, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>
+                My Folders
+              </p>
+              <button
+                onClick={() => setCreateCollectionModalOpen(true)}
+                style={{
+                  padding: '4px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: COLORS.textSecondary,
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = COLORS.input;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+                title="Create new collection"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+            {folders.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {folders.map((folder) =>
+                  renderFolderButton(folder, selectedFolderId === folder.id)
+                )}
+              </div>
+            )}
+          </>
         </div>
 
         {/* Main Content */}
@@ -282,40 +404,43 @@ export function Dashboard() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {filteredBookmarks.map((bookmark) => (
-                  <div
-                    key={bookmark.id}
-                    style={{
-                      backgroundColor: COLORS.surface,
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s',
-                    }}
-                    onClick={() => bookmark.content && handleNavigateToChat(bookmark.content)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <h3 style={{ fontSize: '14px', fontWeight: 500, color: COLORS.textPrimary, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {bookmark.title || 'Untitled Chat'}
-                        </h3>
-                        <p style={{ fontSize: '12px', color: COLORS.textSecondary, margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {bookmark.content || 'No URL'}
-                        </p>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            marginTop: '8px',
-                            padding: '4px 10px',
-                            backgroundColor: COLORS.input,
-                            color: COLORS.accent,
-                            fontSize: '11px',
-                            borderRadius: '12px',
-                          }}
-                        >
-                          {getFolderName(bookmark.collectionId)}
-                        </span>
-                      </div>
+                {filteredBookmarks.map((bookmark) => {
+                  const categoryInfo = getCategoryInfo(bookmark.collectionId);
+                  return (
+                    <div
+                      key={bookmark.id}
+                      style={{
+                        backgroundColor: COLORS.surface,
+                        borderRadius: '16px',
+                        padding: '14px 16px',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onClick={() => bookmark.content && handleNavigateToChat(bookmark.content)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h3 style={{ fontSize: '14px', fontWeight: 500, color: COLORS.textPrimary, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {bookmark.title || 'Untitled Chat'}
+                          </h3>
+                          <p style={{ fontSize: '12px', color: COLORS.textSecondary, margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {bookmark.content || 'No URL'}
+                          </p>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              marginTop: '8px',
+                              padding: '4px 10px',
+                              backgroundColor: categoryInfo.bgColor,
+                              color: categoryInfo.color,
+                              fontSize: '11px',
+                              borderRadius: '12px',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {categoryInfo.label}
+                          </span>
+                        </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleEditBookmark(bookmark); }}
                         style={{
@@ -336,7 +461,8 @@ export function Dashboard() {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -350,19 +476,31 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Bookmark Modal */}
       <BookmarkModal
         isOpen={modalOpen}
-        onClose={() => { setModalOpen(false); setEditingBookmark(null); setAutoFillData(null); }}
+        onClose={() => { setModalOpen(false); setEditingBookmark(null); }}
         onSave={handleSaveBookmark}
         onDelete={modalMode === 'edit' ? handleDeleteBookmark : undefined}
         folders={folders}
         initialData={
           modalMode === 'edit' && editingBookmark
             ? { title: editingBookmark.title || '', url: editingBookmark.content || '', collectionId: editingBookmark.collectionId || null }
-            : autoFillData ? { ...autoFillData, collectionId: null } : { title: '', url: '', collectionId: null }
+            : undefined
+        }
+        defaultCollectionId={
+          modalMode === 'create'
+            ? (selectedFolderId === null || selectedFolderId === 'uncategorized' ? null : selectedFolderId)
+            : undefined
         }
         mode={modalMode}
+      />
+
+      {/* Create Collection Modal */}
+      <CreateCollectionModal
+        isOpen={createCollectionModalOpen}
+        onClose={() => setCreateCollectionModalOpen(false)}
+        onSave={handleCreateCollection}
       />
     </div>
   );

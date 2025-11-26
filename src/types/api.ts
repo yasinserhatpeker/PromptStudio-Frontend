@@ -38,7 +38,6 @@ export interface CreatePromptDTO {
   title?: string | null;
   content?: string | null;
   tags?: string | null;
-  userId: string;
   collectionId?: string | null;
 }
 

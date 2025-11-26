@@ -42,7 +42,12 @@ interface AuthState {
 const getUserFromToken = (token: string): User | null => {
   try {
     const decoded = jwtDecode<JwtClaims>(token);
-    console.log('🔓 [AuthStore] Decoded JWT claims:', decoded);
+
+    // AGGRESSIVE LOGGING - Critical for debugging
+    console.log('🔍 FULL JWT PAYLOAD:', decoded);
+    console.log('🔍 FULL JWT PAYLOAD (stringified):', JSON.stringify(decoded, null, 2));
+    console.log('🔍 All claim keys:', Object.keys(decoded));
+    console.log('🔍 All claim entries:', Object.entries(decoded));
 
     // Extract user ID from various possible claim names
     const id =
@@ -51,19 +56,53 @@ const getUserFromToken = (token: string): User | null => {
       decoded.nameid ||
       '';
 
+    console.log('🆔 Extracted ID:', id);
+
     // Extract email
     const email =
       decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ||
       decoded.email ||
       '';
 
-    // Extract username/name
-    const username =
-      decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ||
-      decoded.name ||
-      decoded.unique_name ||
-      decoded.sub ||
-      '';
+    console.log('📧 Extracted Email:', email);
+
+    // SMARTER USERNAME LOGIC - Try multiple approaches
+    console.log('👤 ===== USERNAME EXTRACTION ATTEMPTS =====');
+
+    // Attempt 1: Standard .NET claim
+    const attempt1 = decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'];
+    console.log('  1️⃣ Standard .NET claim (name):', attempt1);
+
+    // Attempt 2: unique_name
+    const attempt2 = decoded['unique_name'];
+    console.log('  2️⃣ unique_name:', attempt2);
+
+    // Attempt 3: Name (case sensitive)
+    const attempt3 = (decoded as any)['Name'];
+    console.log('  3️⃣ Name (capitalized):', attempt3);
+
+    // Attempt 4: name (lowercase)
+    const attempt4 = decoded.name;
+    console.log('  4️⃣ name (lowercase):', attempt4);
+
+    // Attempt 5: sub
+    const attempt5 = decoded.sub;
+    console.log('  5️⃣ sub:', attempt5);
+
+    // Find first non-empty value
+    const foundName = attempt1 || attempt2 || attempt3 || attempt4 || attempt5;
+    console.log('  ✅ Found name from claims:', foundName);
+
+    // ULTIMATE FALLBACK: Extract username from email
+    let emailName = '';
+    if (email) {
+      emailName = email.split('@')[0];
+      console.log('  📧 Extracted from email:', emailName);
+    }
+
+    const username = foundName || emailName || 'Guest';
+    console.log('  🎯 FINAL username:', username);
+    console.log('==========================================');
 
     if (!id) {
       console.warn('🔓 [AuthStore] Could not extract user ID from token');
@@ -71,7 +110,9 @@ const getUserFromToken = (token: string): User | null => {
     }
 
     const user: User = { id, email, username };
-    console.log('👤 [AuthStore] Extracted user from token:', user);
+    console.log('👤 [AuthStore] ===== FINAL USER OBJECT =====');
+    console.log('Extracted user from token:', user);
+    console.log('==========================================');
     return user;
   } catch (error) {
     console.error('🔓 [AuthStore] Failed to decode JWT:', error);
@@ -176,35 +217,54 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loadAuth: async () => {
+    console.log('🔄 [AuthStore] ===== LOADING AUTH FROM STORAGE =====');
     set({ isLoading: true });
     try {
       const result = await storageGet(['accessToken', 'refreshToken', 'user']);
       const accessToken = result.accessToken || null;
       const refreshToken = result.refreshToken || null;
 
+      console.log('📦 Retrieved from storage:', {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        hasStoredUser: !!result.user,
+      });
+
       let user: User | null = null;
 
-      // First try to decode user from token (most reliable)
+      // First try to decode user from token (most reliable - always fresh)
       if (accessToken) {
+        console.log('🔓 Attempting to decode user from access token...');
         user = getUserFromToken(accessToken);
+
+        // If we successfully decoded user from token, update storage
+        if (user) {
+          console.log('✅ User decoded from token successfully, updating storage...');
+          await storageSet({ user: JSON.stringify(user) });
+        }
       }
 
       // Fallback: try to load persisted user from storage
       if (!user && result.user) {
         try {
+          console.log('⚠️ Token decode failed, falling back to stored user...');
           user = JSON.parse(result.user);
-          console.log('👤 [AuthStore] User loaded from storage:', user);
+          console.log('👤 [AuthStore] User loaded from storage fallback:', user);
         } catch (e) {
           console.error('👤 [AuthStore] Failed to parse stored user:', e);
         }
       }
 
-      console.log('🔐 [AuthStore] Auth loaded:', {
+      console.log('🔐 [AuthStore] ===== AUTH LOAD COMPLETE =====');
+      console.log('Auth loaded:', {
         hasToken: !!accessToken,
         hasUser: !!user,
         userId: user?.id,
+        username: user?.username,
+        email: user?.email,
         isAuthenticated: !!accessToken,
       });
+      console.log('==========================================');
 
       set({
         accessToken,

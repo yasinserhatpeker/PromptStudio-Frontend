@@ -8,6 +8,7 @@ export const promptApi = {
    */
   create: async (data: CreatePromptDTO): Promise<Prompt> => {
     console.log('📝 [PromptAPI] Creating prompt with payload:', JSON.stringify(data, null, 2));
+    console.log('📝 [PromptAPI] collectionId type:', typeof data.collectionId, 'value:', data.collectionId);
 
     try {
       const response = await api.post<Prompt>('/api/Prompt', data);

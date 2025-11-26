@@ -30,6 +30,7 @@ interface BookmarkModalProps {
     collectionId: string | null;
   };
   mode: 'create' | 'edit';
+  defaultCollectionId?: string | null;
 }
 
 export function BookmarkModal({
@@ -40,25 +41,49 @@ export function BookmarkModal({
   folders,
   initialData,
   mode,
+  defaultCollectionId,
 }: BookmarkModalProps) {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [collectionId, setCollectionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
-    if (isOpen && initialData) {
-      setTitle(initialData.title);
-      setUrl(initialData.url);
-      setCollectionId(initialData.collectionId);
+    if (isOpen) {
+      console.log('📋 [BookmarkModal] Opening with defaultCollectionId:', defaultCollectionId);
+      if (initialData) {
+        console.log('📋 [BookmarkModal] Using initialData:', initialData);
+        setTitle(initialData.title);
+        setUrl(initialData.url);
+        setCollectionId(initialData.collectionId);
+      } else {
+        // Auto-fill with current page info for new bookmarks
+        const currentUrl = window.location.href;
+        const currentTitle = document.title.replace(' | ChatGPT', '').replace('ChatGPT - ', '');
+        setTitle(currentTitle);
+        setUrl(currentUrl);
+
+        // Use defaultCollectionId (could be null for uncategorized)
+        if (defaultCollectionId !== undefined) {
+          console.log('📋 [BookmarkModal] Setting collectionId to defaultCollectionId:', defaultCollectionId);
+          setCollectionId(defaultCollectionId);
+        } else {
+          console.log('📋 [BookmarkModal] defaultCollectionId is undefined, setting to null');
+          setCollectionId(null);
+        }
+      }
+      setShowDeleteConfirm(false);
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, defaultCollectionId, folders]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
+
+    console.log('📋 [BookmarkModal] Submitting with collectionId:', collectionId);
 
     try {
       await onSave({ title, url, collectionId });
@@ -73,10 +98,15 @@ export function BookmarkModal({
     }
   };
 
-  const handleDelete = async () => {
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
     if (!onDelete) return;
 
     setIsLoading(true);
+    setError(null);
     try {
       await onDelete();
       onClose();
@@ -84,7 +114,12 @@ export function BookmarkModal({
       setError(err instanceof Error ? err.message : 'Failed to delete bookmark');
     } finally {
       setIsLoading(false);
+      setShowDeleteConfirm(false);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(false);
   };
 
   if (!isOpen) return null;
@@ -220,8 +255,11 @@ export function BookmarkModal({
             <div>
               <label style={labelStyle}>Save to Folder</label>
               <select
-                value={collectionId || ''}
-                onChange={(e) => setCollectionId(e.target.value || null)}
+                value={collectionId ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCollectionId(value === '' ? null : value);
+                }}
                 style={{
                   ...inputStyle,
                   cursor: 'pointer',
@@ -233,7 +271,7 @@ export function BookmarkModal({
                   paddingRight: '44px',
                 }}
               >
-                <option value="">No Folder (Uncategorized)</option>
+                <option value="">Uncategorized</option>
                 {folders.map((folder) => (
                   <option key={folder.id} value={folder.id}>
                     {folder.name || 'Unnamed Folder'}
@@ -254,66 +292,128 @@ export function BookmarkModal({
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              {mode === 'edit' && onDelete && (
+            {showDeleteConfirm ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: 'rgba(234, 67, 53, 0.1)',
+                    borderRadius: '12px',
+                    border: `1px solid ${COLORS.danger}`,
+                  }}
+                >
+                  <p style={{ fontSize: '14px', color: COLORS.error, margin: 0, fontWeight: 500 }}>
+                    Are you sure you want to delete this bookmark?
+                  </p>
+                  <p style={{ fontSize: '12px', color: COLORS.textSecondary, margin: '4px 0 0', opacity: 0.8 }}>
+                    This action cannot be undone.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={handleDeleteCancel}
+                    disabled={isLoading}
+                    style={{
+                      flex: 1,
+                      padding: '12px 18px',
+                      backgroundColor: COLORS.input,
+                      color: COLORS.textPrimary,
+                      border: 'none',
+                      borderRadius: '24px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
+                      opacity: isLoading ? 0.5 : 1,
+                      transition: 'background-color 0.2s',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteConfirm}
+                    disabled={isLoading}
+                    style={{
+                      flex: 1,
+                      padding: '12px 18px',
+                      backgroundColor: COLORS.danger,
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '24px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
+                      opacity: isLoading ? 0.5 : 1,
+                      transition: 'background-color 0.2s',
+                    }}
+                  >
+                    {isLoading ? 'Deleting...' : 'Delete Bookmark'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                {mode === 'edit' && onDelete && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    disabled={isLoading}
+                    style={{
+                      padding: '12px 18px',
+                      backgroundColor: COLORS.danger,
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '24px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
+                      opacity: isLoading ? 0.5 : 1,
+                      transition: 'background-color 0.2s',
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleDelete}
-                  disabled={isLoading}
+                  onClick={onClose}
                   style={{
+                    flex: 1,
                     padding: '12px 18px',
-                    backgroundColor: COLORS.danger,
-                    color: '#FFFFFF',
+                    backgroundColor: COLORS.input,
+                    color: COLORS.textPrimary,
                     border: 'none',
                     borderRadius: '24px',
                     fontSize: '14px',
                     fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  style={{
+                    flex: 1,
+                    padding: '12px 18px',
+                    backgroundColor: COLORS.buttonPrimary,
+                    color: COLORS.buttonPrimaryText,
+                    border: 'none',
+                    borderRadius: '24px',
+                    fontSize: '14px',
+                    fontWeight: 600,
                     cursor: isLoading ? 'not-allowed' : 'pointer',
                     opacity: isLoading ? 0.5 : 1,
                     transition: 'background-color 0.2s',
                   }}
                 >
-                  Delete
+                  {isLoading ? 'Saving...' : mode === 'create' ? 'Save Bookmark' : 'Update'}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                style={{
-                  flex: 1,
-                  padding: '12px 18px',
-                  backgroundColor: COLORS.input,
-                  color: COLORS.textPrimary,
-                  border: 'none',
-                  borderRadius: '24px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading}
-                style={{
-                  flex: 1,
-                  padding: '12px 18px',
-                  backgroundColor: COLORS.buttonPrimary,
-                  color: COLORS.buttonPrimaryText,
-                  border: 'none',
-                  borderRadius: '24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  opacity: isLoading ? 0.7 : 1,
-                  transition: 'background-color 0.2s',
-                }}
-              >
-                {isLoading ? 'Saving...' : mode === 'create' ? 'Save Bookmark' : 'Update'}
-              </button>
-            </div>
+              </div>
+            )}
           </form>
         </div>
       </div>
